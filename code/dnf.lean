@@ -1,7 +1,8 @@
 import data.bool logic logic.connectives
 
-print prefix decidable
+section dnf
 
+-- The type of syntactic formulae with "A"s at the leaves
 inductive Formula (A : Type) : Type :=
 | Var     : A → Formula A
 | Not     : Formula A → Formula A
@@ -9,22 +10,26 @@ inductive Formula (A : Type) : Type :=
 | Or      : Formula A → Formula A → Formula A
 -- | Implies : Formula A → Formula A → Formula A
 
-open Formula bool
-check tt
+print bool
 
+open Formula bool
+
+definition var {A : Type} [coercion] : A → Formula A := Var
+
+-- This function distributes a (simple) formula over disjunctions on the right
 definition right_conj {A : Type} : Formula A → Formula A → Formula A
 | right_conj a (Or b c) := Or (right_conj a b) (right_conj a c)
 | right_conj a d        := And a d
 
+-- This function distributes a formula over disjunctions on the left
 definition conjunct {A : Type} : Formula A → Formula A → Formula A
 | conjunct (Or a b) c := Or (conjunct a c) (conjunct b c)
 | conjunct d        c := right_conj d c
 
--- definition push_neg {A : Type} : Formula A → Formula A
--- | push_neg (Var v)   := Not (Var v)
--- | push_neg (Not a)   := a
--- | push_neg (And a b) :=
+-- This function simultaneously computes the Disjunctive Normal Form (DNF) of a formula
+-- and the DNF of its negation depending on the flag.
 
+-- Both are required simultaneously in order for the function to work.
 definition dnf_aux {A : Type} : bool → Formula A → Formula A
 | dnf_aux tt (Var v)   := Var v
 | dnf_aux ff (Var v)   := Not (Var v)
@@ -37,16 +42,22 @@ definition dnf_aux {A : Type} : bool → Formula A → Formula A
 
 definition dnf {A : Type} := @dnf_aux A tt
 
--- variable A : Type
--- variables f g h i : A
+-- Let's test our function, to see if it works as expected
+section test_eval
 
--- -- definition var [coercion] : A → Formula A := Var
+variable A : Type
+
+variables f g h i : A
 
 
--- eval (dnf (Or (And (Var f) (Or (Var g) (Var h))) (Var i)))
+eval dnf (Or (And (Var f) (Or (Var g) (Var h))) (Var i))
 
 
--- theorem test : dnf (And (Var f) (Var i)) = And (Var f) (Var i) := by apply eq.refl
+theorem test : dnf (Or (And (Var f) (Or (Var g) (Var h))) (Var i)) = Or (Or (And (Var f) (Var g)) (And (Var f) (Var h))) (Var i)
+ 
+:= by apply eq.refl
+
+end test_eval
 
 
 definition interp : Formula Prop → Prop
@@ -97,11 +108,7 @@ lemma conjunct_correct1 {P Q} : ⟦conjunct P Q⟧ → ⟦P⟧ ∧ ⟦Q⟧ :=
 check non_contradictory_intro
 check and_of_and_of_imp_of_imp
 
--- theorem test : ∀ P : Prop, P ∨ ¬ P := assume P, decidable.em P
 
--- lemma not_and_or {a b : Prop} : 
-
-print prefix or
 lemma or_not_not_and {a b : Prop} : (¬ a) ∨ (¬ b) → ¬ (a ∧ b) :=
 proof
   assume (H1 : ¬ a ∨ ¬ b)(H2 : a ∧ b),
@@ -120,11 +127,7 @@ begin
   {apply R, assumption}
 end
 
-reveal or_not_not_and
-
-print or_not_not_and
-
--- this is tougher!
+-- This lemma is tougher! We need to prove the positive and negative cases for dnf_aux simultaneously
 lemma dnf_aux_correct1 {P} : (⟦dnf_aux tt P⟧ → ⟦P⟧) ∧ (⟦dnf_aux ff P⟧ → ¬ ⟦P⟧) :=
 proof
   Formula.induction_on P
@@ -220,8 +223,7 @@ check and.elim_left
 
 lemma dnf_correct1 {P} : ⟦dnf P⟧ → ⟦P⟧ := by exact (and.elim_left dnf_aux_correct1)
 
-axiom em {P : Prop} : decidable P
-local attribute em [instance]
+hypothesis em [instance] {P : Prop} : decidable P
 
 print prefix decidable
 
@@ -285,16 +287,9 @@ print prefix iff
 lemma normalize {P : Prop} [h : reifiable P] : ⟦dnf (phi P)⟧ ↔ P :=
   calc
     ⟦dnf (phi P)⟧ ↔ ⟦phi P⟧ : dnf_correct
-    ...          ↔ P       : by rewrite- is_reification --iff.symm (is_reification _)
+    ...          ↔ P       : by rewrite- is_reification
 
 
-
-  -- begin
-   
-  --   rewrite (is_reification P)
-  -- end
-
--- by apply (iff.intro dnf_impl1 dnf_impl2)
 
 variable A : Type
 variables x y z : A
@@ -302,9 +297,9 @@ variables x y z : A
 
 definition pdnf (P : Prop) [h : reifiable P] : Prop := ⟦dnf (phi P)⟧
 
-lemma test : reifiable (¬ (x = y ∧ y = z) ∨ x = z) := _
+lemma test' : reifiable (¬ (x = y ∧ y = z) ∨ x = z) := _
 
-lemma test' : reifiable ((¬ (x = y) ∨ ¬ (y = z)) ∨ x = z) := _
+lemma test'' : reifiable ((¬ (x = y) ∨ ¬ (y = z)) ∨ x = z) := _
 
 eval (pdnf (¬ (x = y ∧ y = z)))
 lemma compute_dnf : pdnf (¬ (x = y ∧ y = z)) = ((x = y → false) ∨ (y = z → false)) := eq.refl _
@@ -317,6 +312,4 @@ lemma test_normalize : ((x ≠ y ∨ y ≠ z) ∨ x = z) ↔ (¬ (x = y ∧ y = 
     normalize
   qed
 
-  -- begin
-  --   apply normalize
-  -- end
+end dnf
