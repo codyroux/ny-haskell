@@ -1,0 +1,1 @@
+The materials for the Nov 25, 2015 talk at the NY Haskell reunion on the Lean theorem prover.
