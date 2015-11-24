@@ -14,8 +14,6 @@ print bool
 
 open Formula bool
 
-definition var {A : Type} [coercion] : A → Formula A := Var
-
 -- This function distributes a (simple) formula over disjunctions on the right
 definition right_conj {A : Type} : Formula A → Formula A → Formula A
 | right_conj a (Or b c) := Or (right_conj a b) (right_conj a c)
@@ -131,15 +129,16 @@ end
 lemma dnf_aux_correct1 {P} : (⟦dnf_aux tt P⟧ → ⟦P⟧) ∧ (⟦dnf_aux ff P⟧ → ¬ ⟦P⟧) :=
 proof
   Formula.induction_on P
-    (begin intros a, constructor, repeat (intro H; exact H) end)
+    (begin intros a, constructor, all_goals (intro H; exact H) end)
     (proof
       assume a H,
         obtain (H1 : ⟦dnf_aux tt a⟧ → ⟦a⟧)
                (H2 : ⟦dnf_aux ff a⟧ → ¬⟦a⟧),
                from H,
-        and.intro H2
-        (assume H3 : ⟦dnf_aux ff (Not a)⟧,
-         assert H4 : ⟦a⟧, from H1 H3,
+        and.intro
+         (show ⟦dnf_aux tt (Not a)⟧ → ⟦Not a⟧, from H2)
+         (assume H3 : ⟦dnf_aux ff (Not a)⟧,
+           assert H4 : ⟦a⟧, from H1 H3,
            show ¬(¬⟦a⟧), from
              non_contradictory_intro H4)
      qed)
@@ -151,8 +150,8 @@ proof
             assert H3' : ⟦dnf_aux tt a⟧ ∧ ⟦dnf_aux tt b⟧, from
               conjunct_correct1 H3,
             show ⟦a⟧ ∧ ⟦b⟧, from
-             assert H1' : ⟦dnf_aux tt a⟧ → ⟦a⟧, from and.elim_left H1,
-             assert H2' : ⟦dnf_aux tt b⟧ → ⟦b⟧, from and.elim_left H2,
+             assert H1' : ⟦dnf_aux tt a⟧ → ⟦a⟧, from and.left H1,
+             assert H2' : ⟦dnf_aux tt b⟧ → ⟦b⟧, from and.left H2,
               and_of_and_of_imp_of_imp H3' H1' H2'
             qed),
           assert R : ⟦dnf_aux ff (And a b)⟧ → ¬⟦And a b⟧, from 
@@ -163,8 +162,8 @@ proof
               assert D : ¬⟦a⟧ ∨ ¬⟦b⟧, from
                 proof
                   show ¬⟦a⟧ ∨ ¬⟦b⟧, from
-                  assert H1' : ⟦dnf_aux ff a⟧ → ¬⟦a⟧, from and.elim_right H1,
-                  assert H2' : ⟦dnf_aux ff b⟧ → ¬⟦b⟧, from and.elim_right H2,
+                  assert H1' : ⟦dnf_aux ff a⟧ → ¬⟦a⟧, from and.right H1,
+                  assert H2' : ⟦dnf_aux ff b⟧ → ¬⟦b⟧, from and.right H2,
                     or.imp H1' H2' H3
                 qed,
                   or_not_not_and D
@@ -172,66 +171,57 @@ proof
             qed,
         and.intro L R
       qed)
-    (proof
-      assume a b H1 H2,
-        begin
-          split,
-          intro H,
-          assert I : ⟦dnf_aux tt a⟧ ∨ ⟦dnf_aux tt b⟧ , exact H,
-          clear H,
-          cases I with I' I',
+      begin
+        intros a b H1 H2,
+        split,
+        intro H,
+        esimp [interp],
+        esimp [interp, dnf_aux] at H,
+        cases H with H' H',
           {
             clear H2,
             left,
-            change ⟦a⟧,
             cases H1 with L R,
             apply L,
             assumption
           },
+
           {
             clear H1,
             right,
-            change ⟦b⟧,
             cases H2 with L R,
             apply L,
             assumption
           },
-          intro H,
-          apply (@and_not_not_or ⟦a⟧ ⟦b⟧),
-          split,
+        intro H,
+        esimp [interp],
+        apply (@and_not_not_or ⟦a⟧ ⟦b⟧),
+        split,
           {
             cases H1 with L R,
             apply R,
-            apply (@and.elim ⟦dnf_aux ff a⟧ ⟦dnf_aux ff b⟧),
+            esimp [dnf_aux] at H,
+            apply and.left,
             apply conjunct_correct1,
-            exact H,
-            intros h i, exact h
+            exact H
           },
           {
             cases H2 with L R,
             apply R,
-            apply (@and.elim ⟦dnf_aux ff a⟧ ⟦dnf_aux ff b⟧),
+            esimp [dnf_aux] at H,
+            apply and.right,
             apply conjunct_correct1,
-            exact H,
-            intros h i, exact i
+            exact H
           }
         end
-      qed)
 qed
 
-check and.elim_left
-
-lemma dnf_correct1 {P} : ⟦dnf P⟧ → ⟦P⟧ := by exact (and.elim_left dnf_aux_correct1)
-
-hypothesis em [instance] {P : Prop} : decidable P
-
-print prefix decidable
+lemma dnf_correct1 {P} : ⟦dnf P⟧ → ⟦P⟧ := by exact (and.left dnf_aux_correct1)
 
 -- this actually needs EM
 lemma dnf_correct2 {P} : ⟦P⟧ → ⟦dnf P⟧ := sorry
 
 print prefix iff
-
 theorem dnf_correct {P} : ⟦dnf P⟧ ↔ ⟦P⟧ :=
 proof
    have H1 : ⟦dnf P⟧ → ⟦P⟧, from dnf_correct1,
@@ -239,11 +229,18 @@ proof
      iff.intro H1 H2
 qed
 
---structure reifiable [class] (P : Prop) := (phi : Formula Prop)(is_reification : P ↔ ⟦phi⟧)
+-- The reifiable class captures the propositions which have a
+-- representation in syntax, which is witnessed by the "is_reification"
+-- field.
 structure reifiable [class] (P : Prop) := (phi : Formula Prop)(is_reification : P = ⟦phi⟧)
+
+-- we could have chosen P ↔ ⟦phi⟧ alternatively
+
 
 open reifiable
 
+-- We define class instances for reifiable for all the formulae that
+-- we want to be able to reify
 definition atom_reifiable [instance] {A : Type} {x y : A} : reifiable (x = y) :=
  reifiable.mk (Var (x = y)) (eq.refl _)
 
