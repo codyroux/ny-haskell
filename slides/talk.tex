@@ -21,6 +21,7 @@
 \usepackage{unixode}
 
 \newcommand{\ttt}[1]{\texttt{#1}}
+\DeclareTextFontCommand{\emph}{\bfseries}
 
 \newcommand{\bN}{\mathbb{N}}
 \newcommand{\bZ}{\mathbb{Z}}
@@ -43,9 +44,9 @@
 \newcommand{\mvar}{?\!}
 \newcommand{\lean}{Lean}
 
-\title{The Lean Theorem Prover}
+\title{Interactive Theorem Proving with Lean}
 
-\author{Cody Roux}
+\author{Cody Roux\\ Draper Labs}
 
 \begin{document}
 
@@ -94,7 +95,7 @@
   But...
   \begin{center}
     ``The striking thing about our CompCert results is that the
-    middleend bugs we found in all other compilers are absent. As of
+    middle-end bugs we found in all other compilers are absent. As of
     early 2011, the under-development version of CompCert is the only
     compiler we have tested for which Csmith cannot find
     wrong-code errors. This is not for lack of trying: we have devoted
@@ -133,14 +134,14 @@
 \begin{frame}{Lean}
   Ok, some more sales pitch:\bigskip
 
-  In this talk, I'll be using a new theorem prover called Lean, develloped by
+  In this talk, I'll be using a new theorem prover called Lean, developed by
   \begin{itemize}
   \item Leo de Moura, at Microsoft Research
   \item Jeremy Avigad, Soonho Kong, Floris van Doorn at CMU
   \item And many others!
   \end{itemize}
 
-  Can be found at \blue{http://leanprover.github.io}
+  Can be found at \url{http://leanprover.github.io}
 \end{frame}
   
 \section{The Core Components}
@@ -166,7 +167,7 @@
   \begin{block}{The ideal prover}
     \begin{itemize}
     \item The kernel: Some implementation of a powerful logic that can express all abstractions.
-    \item The proof engine: Just a \texttt{Prove} button!
+    \item The proof engine: Just a \ttt{Prove} button!
     \end{itemize}
   \end{block}
   \begin{block}{The simplest prover}
@@ -212,9 +213,10 @@
     \begin{itemize}
     \item A theory of \emph{dependent types} that unifies \emph{function
       spaces, universal quantifiers and polymorphism}
+    \item An impredicative type of propositions
     \item A hierarchy of \emph{universes}
     \item Inductive families (GADTs in Haskell)
-    \item Quotient types (useful to build $\mathbb{Z}$)
+    \item Quotient types (useful to build $\bZ$)
     \end{itemize}
   \end{block}
   This is similar to the logic of Coq.
@@ -231,6 +233,8 @@
   There is an alternate implementation of the kernel, in Haskell (a
   couple thousand lines).
 \end{frame}
+
+\section{A specification example}
 
 \begin{frame}{A specification example}
   Let's work through an example to demonstrate the specification
@@ -275,7 +279,7 @@ inductive eq {A : Type} (a : A) : A → Prop :=
 \end{frame}
 
 \begin{frame}[fragile]{A specification example}
-  Natural numbers are also spefied by induction
+  Natural numbers are also specified by induction
   \begin{lstlisting}
     inductive ℕ :=
     | zero : ℕ
@@ -315,6 +319,8 @@ inductive eq {A : Type} (a : A) : A → Prop :=
   \end{lstlisting}
 \end{frame}
 
+\section{Elaboration}
+
 \begin{frame}[fragile]{The elaborator}
   To have any hope of being able to actually specify and prove
   anything, we need
@@ -345,14 +351,19 @@ inductive eq {A : Type} (a : A) : A → Prop :=
     we need to account and search for \emph{multiple solutions}.
 \end{frame}
 
+\section{Proofs}
+
 \begin{frame}{The proof language}
   How to design an effective high-level proof language is one of the
   major open questions in ITP research.\bigskip
 
   Right now there are 2 main approaches:
   \begin{itemize}
-  \item A ``stack based'' \emph{tactic language}, which operates by transforming the goal in a series of composable steps. Very powerful, but hard to read
-  \item A declarative ``isar-like'' langauge, which is more verbose but easier to read and understand.
+  \item A ``stack based'' \emph{tactic language}, which operates by
+    transforming the goal in a series of composable steps. Very
+    powerful, but hard to read
+  \item A declarative ``isar-like'' language, which is more verbose
+    but easier to read and understand
   \end{itemize}
   
   On top of this, we need some powerful proof automation to help with
@@ -367,6 +378,8 @@ inductive eq {A : Type} (a : A) : A → Prop :=
     {\huge \bf Questions}
   \end{center}
 \end{frame}
+
+\section{Technical features of Lean}
 
 \begin{frame}[fragile]{A little more depth...}
   Some additional features:
@@ -383,32 +396,116 @@ inductive eq {A : Type} (a : A) : A → Prop :=
 \end{frame}
 
 \begin{frame}[fragile]{Coercions}
+  An important part of elaboration is the ability to insert
+  \emph{implicit casts}
+\small{
+  \begin{lstlisting}
+variable {A : Type}
+definition to_list [coercion] :
+               ∀ {n : nat}, vector A n → list A
+| to_list 0 nil := nil
+| to_list (n+1) (a::v) := a::(to_list v)
+variable f : list nat → Prop
+variable v : vector nat 10
+check f v -- f (@to_list nat 10 v)
+  \end{lstlisting}
+}
 \end{frame}
 
 \begin{frame}[fragile]{Classes and structures}
+  The notion of \emph{dependent record} is a really natural way of
+  representing \emph{mathematical structures}
+\small{
+  \begin{lstlisting}
+ structure group (A : Type) :=
+ (mul : A → A → A)
+ (mul_assoc : ∀ a b c, mul (mul a b) c = mul a (mul b c))
+ (...)
+  \end{lstlisting}}
+But it's better to use classes and inheritance for modularity
+\small{
+  \begin{lstlisting}
+ structure has_mul [class] (A : Type) :=
+    (mul : A → A → A)
+ structure semigroup [class] (A : Type) extends has_mul A :=
+ (mul_assoc : ∀ a b c, mul (mul a b) c = mul a (mul b c))
+  ...
+  \end{lstlisting}}
+
+\end{frame}
+
+\begin{frame}[fragile]{Decidable Type Class}
+    An element of \Prop is said to be decidable if we can decide
+    whether it is true or false.
+
+    \begin{lstlisting}
+      inductive decidable [class] (p : Prop) : Type :=
+      | inl : p → decidable p
+      | inr : ¬p → decidable p
+    \end{lstlisting}
+
+    Having an element \ttt{t : decidable p} is stronger than having an element \ttt{t : p ∨ ¬p}
+    
+    The expression \ttt{if c then t else e} contains an implicit argument \ttt{[d : decidable c]}.
+    If Hilbert's choice is imported, then all propositions are decidable (smooth transition to classical reasoning).
 \end{frame}
 
 \begin{frame}[fragile]{Quotient types}
+  We support \emph{quotient types}
+  \begin{itemize}
+  \item For any type $A$ that supports an equivalence relation $R$ we
+    can form a type $A/R$
+  \item $A/R$ has the \emph{universal property}: there is a function
+    \[f:A/R \rightarrow B\]
+    exactly when there is a $g:A\rightarrow B$ such that
+    \[\forall x y,\ x\ R\ y\ \Rightarrow g(x) = g(y)\]
+  \end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]{HoTT}
+  There has been a lot of buzz around the recent \emph{synthetic
+    approach to homotopy theory} based on type theory.\bigskip
+
+  There is a mode in Lean designed for this. Some features
+  \begin{itemize}
+  \item No impredicative type \Prop
+  \item A special case of \emph{higher inductive types} ($n$-truncations)
+  \end{itemize}
 \end{frame}
+
+
+\begin{frame}[fragile]{Libraries}
+  A theorem prover is only as good as its libraries. Lean already has several
+  \begin{itemize}
+  \item \ttt{init}: the basic definitions of logical connectives,
+    quantifiers, equality and $\bN$
+  \item \ttt{data}: All the programmers favorites: lists, ints, bools,
+    finite sets and real numbers
+  \item \ttt{algebra}: the hierarchy of algebraic structures, including groups, rings and fields
+  \item \ttt{theories}: more fleshed out logical theories, with group
+    theory (up to Sylow's theorems!), combinatorics, basic analysis
+    and number theory
+  \end{itemize}
+\end{frame}
+
 
 \begin{frame}[fragile]{What about Coq?}
   The most obviously similar ITP in the same design space is Coq.
   \begin{block}{The major differences}
     \begin{itemize}
-    \item 
+    \item Similar core theories: dependent types, impredicative, universes
+    \item Some additional features in Lean: Quotient types, HoTT mode
+    \item Lean has recursors instead of built-in pattern matching
+      (harder to get wrong)
+    \item Less automation (for now)
+    \item A mechanism for trust: you can call un-trusted decision
+      procedures, which can be run in ``safe mode'': the proof is then
+      completely re-built
     \end{itemize}
   \end{block}
  
 \end{frame}
 
-%% \begin{frame}[fragile]{}
-%% \end{frame}
-
-%% \begin{frame}[fragile]{}
-%% \end{frame}
 
 %% \begin{frame}[fragile]{}
 %% \end{frame}
